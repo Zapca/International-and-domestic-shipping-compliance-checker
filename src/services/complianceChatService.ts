@@ -10,7 +10,7 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-  1// Issue resolution suggestion type
+// Issue resolution suggestion type
 export interface ResolutionSuggestion {
   issueId: string;
   field: string;
