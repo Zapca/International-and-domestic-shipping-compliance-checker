@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { ComplianceResult } from './types';
 import { FormattedData } from './formatConverter';
@@ -108,6 +108,68 @@ export class PdfReportGenerator {
     doc.setFont('helvetica', 'bold');
     doc.text(isCompliant ? 'COMPLIANT' : 'NON-COMPLIANT', 172.5, 23, { align: 'center' });
     
+    // Add entry data section - this is the new section to display raw input data
+    let currentY = 50;
+    if (formattedData && formattedData.rawText) {
+      doc.setTextColor(33, 80, 119);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Original Entry Data', 14, currentY);
+      
+      // Add light blue header bar
+      doc.setFillColor(232, 244, 248);
+      doc.rect(14, currentY + 5, 182, 8, 'F');
+      
+      // Display the raw text
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      
+      // Format the raw text for display (with line breaks)
+      const rawTextY = currentY + 20;
+      const formattedText = doc.splitTextToSize(formattedData.rawText, 170);
+      doc.text(formattedText, 14, rawTextY);
+      
+      // Update current Y position
+      currentY = rawTextY + (formattedText.length * 5) + 20;
+    }
+    
+    // Add processing metadata section if available
+    if (formattedData && formattedData.processingMetadata) {
+      doc.setTextColor(33, 80, 119);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Processing Information', 14, currentY);
+      
+      // Add light blue header bar
+      doc.setFillColor(232, 244, 248);
+      doc.rect(14, currentY + 5, 182, 8, 'F');
+      
+      const metadataY = currentY + 20;
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      
+      // Display processing metadata
+      const metadata = formattedData.processingMetadata;
+      doc.text(`Source: ${metadata.source || 'Unknown'}`, 20, metadataY);
+      doc.text(`Confidence: ${(metadata.confidence * 100).toFixed(2)}%`, 20, metadataY + 10);
+      doc.text(`Processing Timestamp: ${metadata.timestamp || new Date().toISOString()}`, 20, metadataY + 20);
+      
+      // Display warnings if any
+      if (metadata.warnings && metadata.warnings.length > 0) {
+        doc.text('Warnings:', 20, metadataY + 30);
+        metadata.warnings.forEach((warning, index) => {
+          doc.text(`• ${warning}`, 25, metadataY + 40 + (index * 8));
+        });
+        
+        // Update current Y position based on number of warnings
+        currentY = metadataY + 50 + (metadata.warnings.length * 8);
+      } else {
+        currentY = metadataY + 30;
+      }
+    }
+    
     // Add compliance statistics
     const stats = this.calculateComplianceStats(results);
     
@@ -116,7 +178,7 @@ export class PdfReportGenerator {
     doc.setLineWidth(0.5);
     
     // Statistics row
-    const statY = 50;
+    const statY = currentY + 10;
     const boxHeight = 40;
     const boxMargin = 5;
     const boxWidth = 45;
@@ -209,50 +271,57 @@ export class PdfReportGenerator {
           shipmentTable.push([this.formatFieldName(key), String(value || '')]);
         });
       
-      try {
-        doc.autoTable({
-          startY: shipmentInfoY + 15,
-          head: [], // No header as we already manually added it
-          body: shipmentTable,
-          theme: 'plain',
-          styles: {
-            fontSize: 9,
-            cellPadding: 3,
-          },
-          columnStyles: {
-            0: { 
-              cellWidth: 50,
-              fontStyle: 'bold',
-              textColor: [70, 70, 70]
+      // Check if autoTable is available, use it if possible
+      if (typeof doc.autoTable === 'function') {
+        try {
+          doc.autoTable({
+            startY: shipmentInfoY + 15,
+            head: [], // No header as we already manually added it
+            body: shipmentTable,
+            theme: 'plain',
+            styles: {
+              fontSize: 9,
+              cellPadding: 3,
             },
-            1: { 
-              cellWidth: 'auto',
-              textColor: [50, 50, 50]
+            columnStyles: {
+              0: { 
+                cellWidth: 50,
+                fontStyle: 'bold',
+                textColor: [70, 70, 70]
+              },
+              1: { 
+                cellWidth: 'auto',
+                textColor: [50, 50, 50]
+              }
+            },
+            alternateRowStyles: {
+              fillColor: [245, 245, 245]
+            },
+            didDrawCell: (data: {
+              cell: { x: number; y: number; width: number; height: number };
+              section: string;
+            }) => {
+              // Add light gray bottom border to each cell
+              if (data.section === 'body') {
+                doc.setDrawColor(220, 220, 220);
+                doc.setLineWidth(0.1);
+                doc.line(
+                  data.cell.x, 
+                  data.cell.y + data.cell.height, 
+                  data.cell.x + data.cell.width, 
+                  data.cell.y + data.cell.height
+                );
+              }
             }
-          },
-          alternateRowStyles: {
-            fillColor: [245, 245, 245]
-          },
-          didDrawCell: (data: {
-            cell: { x: number; y: number; width: number; height: number };
-            section: string;
-          }) => {
-            // Add light gray bottom border to each cell
-            if (data.section === 'body') {
-              doc.setDrawColor(220, 220, 220);
-              doc.setLineWidth(0.1);
-              doc.line(
-                data.cell.x, 
-                data.cell.y + data.cell.height, 
-                data.cell.x + data.cell.width, 
-                data.cell.y + data.cell.height
-              );
-            }
-          }
-        });
-      } catch (tableError) {
-        console.error('Error generating shipment table:', tableError);
-        // Continue without the table rather than failing completely
+          });
+        } catch (error) {
+          console.error('Error using autoTable for shipment info, falling back to simple format:', error);
+          this.renderShipmentInfoTable(doc, shipmentTable, shipmentInfoY + 15);
+        }
+      } else {
+        // Fallback to simpler format if autoTable is not available
+        console.warn('autoTable function not available, using simple table format for shipment info');
+        this.renderShipmentInfoTable(doc, shipmentTable, shipmentInfoY + 15);
       }
     }
     
@@ -611,6 +680,175 @@ export class PdfReportGenerator {
         console.error('Error adding footer:', footerError);
       }
     }
+
+    // Add detailed results
+    const issuesY = doc.lastAutoTable?.finalY || (statY + boxHeight + 80);
+    
+    doc.setTextColor(33, 80, 119);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Compliance Details', 14, issuesY + 15);
+    
+    // Add light blue header bar
+    doc.setFillColor(232, 244, 248);
+    doc.rect(14, issuesY + 20, 182, 8, 'F');
+    
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FIELD', 20, issuesY + 26);
+    doc.text('VALUE', 60, issuesY + 26);
+    doc.text('STATUS', 120, issuesY + 26);
+    doc.text('MESSAGE', 150, issuesY + 26);
+    
+    // Prepare compliance results table
+    const complianceTableData = results.map(result => [
+      result.field || '',
+      (result.value || '').substr(0, 25) + ((result.value || '').length > 25 ? '...' : ''),
+      result.status,
+      result.message
+    ]);
+    
+    // Check if autoTable is available, use it if possible
+    if (typeof doc.autoTable === 'function') {
+      try {
+        // Add full results table with color coding
+        doc.autoTable({
+          startY: issuesY + 30,
+          head: [], // No header as we already manually added it
+          body: complianceTableData,
+          theme: 'plain',
+          styles: {
+            fontSize: 8,
+            cellPadding: 3,
+          },
+          columnStyles: {
+            0: { cellWidth: 40 },
+            1: { cellWidth: 60 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 'auto' }
+          },
+          alternateRowStyles: {
+            fillColor: [245, 245, 245]
+          },
+          // Add color to status cells based on compliance status
+          didDrawCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 2) {
+              const rowIndex = data.row.index;
+              const status = complianceTableData[rowIndex][2];
+              
+              // Save current state
+              const fillColor = doc.getFillColor();
+              const textColor = doc.getTextColor();
+              
+              // Draw colored background based on status
+              if (status === 'compliant') {
+                doc.setFillColor(233, 247, 239); // Light green
+              } else if (status === 'warning') {
+                doc.setFillColor(255, 248, 227); // Light yellow
+              } else {
+                doc.setFillColor(248, 232, 232); // Light red
+              }
+              
+              doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+              
+              // Reset to original colors
+              doc.setFillColor(fillColor);
+              doc.setTextColor(textColor);
+              
+              // Add light gray bottom border
+              doc.setDrawColor(220, 220, 220);
+              doc.setLineWidth(0.1);
+              doc.line(
+                data.cell.x, 
+                data.cell.y + data.cell.height, 
+                data.cell.x + data.cell.width, 
+                data.cell.y + data.cell.height
+              );
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error using autoTable for compliance details, falling back to simple format:', error);
+        this.renderComplianceDetailsTable(doc, complianceTableData, issuesY + 30);
+      }
+    } else {
+      // Fallback to simpler format if autoTable is not available
+      console.warn('autoTable function not available, using simple table format for compliance details');
+      this.renderComplianceDetailsTable(doc, complianceTableData, issuesY + 30);
+    }
+  }
+  
+  /**
+   * Render a simple table for compliance details without using autoTable
+   * @param doc PDF document
+   * @param tableData Table data to display
+   * @param startY Starting Y position
+   */
+  private renderComplianceDetailsTable(doc: jsPDF, tableData: any[][], startY: number): void {
+    let yPos = startY;
+    let evenRow = false;
+    
+    tableData.forEach((row, index) => {
+      const [field, value, status, message] = row;
+      
+      // Check if we need a new page
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      // Alternate row colors
+      if (evenRow) {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(14, yPos - 5, 182, 10, 'F');
+      }
+      
+      // Draw status color indicator
+      if (status === 'compliant') {
+        doc.setFillColor(233, 247, 239); // Light green
+      } else if (status === 'warning') {
+        doc.setFillColor(255, 248, 227); // Light yellow
+      } else {
+        doc.setFillColor(248, 232, 232); // Light red
+      }
+      doc.rect(120, yPos - 5, 30, 10, 'F');
+      
+      // Field (column 1)
+      doc.setTextColor(70, 70, 70);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(field, 20, yPos);
+      
+      // Value (column 2)
+      doc.setTextColor(50, 50, 50);
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, 60, yPos);
+      
+      // Status (column 3)
+      if (status === 'compliant') {
+        doc.setTextColor(40, 167, 69); // Green
+      } else if (status === 'warning') {
+        doc.setTextColor(255, 193, 7); // Yellow/amber
+      } else {
+        doc.setTextColor(220, 53, 69); // Red
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.text(status, 125, yPos);
+      
+      // Message (column 4)
+      doc.setTextColor(50, 50, 50);
+      doc.setFont('helvetica', 'normal');
+      doc.text(message, 150, yPos);
+      
+      // Add light gray bottom border
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.1);
+      doc.line(14, yPos + 5, 196, yPos + 5);
+      
+      yPos += 10;
+      evenRow = !evenRow;
+    });
   }
 
   /**
@@ -741,6 +979,46 @@ export class PdfReportGenerator {
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
     
+    // Add entry data section if available
+    let yPos = 45;
+    if (formattedData && formattedData.rawText) {
+      doc.setFontSize(12);
+      doc.text('Original Entry Data:', 20, yPos);
+      doc.setFontSize(10);
+      
+      // Format and display the raw text
+      const formattedText = doc.splitTextToSize(formattedData.rawText, 170);
+      doc.text(formattedText, 30, yPos + 10);
+      
+      // Update current Y position
+      yPos += (formattedText.length * 5) + 15;
+    }
+    
+    // Add processing metadata if available
+    if (formattedData && formattedData.processingMetadata) {
+      doc.setFontSize(12);
+      doc.text('Processing Information:', 20, yPos);
+      doc.setFontSize(10);
+      
+      const metadata = formattedData.processingMetadata;
+      doc.text(`Source: ${metadata.source || 'Unknown'}`, 30, yPos + 10);
+      doc.text(`Confidence: ${(metadata.confidence * 100).toFixed(2)}%`, 30, yPos + 20);
+      doc.text(`Processing Timestamp: ${metadata.timestamp || new Date().toISOString()}`, 30, yPos + 30);
+      
+      // Display warnings if any
+      if (metadata.warnings && metadata.warnings.length > 0) {
+        doc.text('Warnings:', 30, yPos + 40);
+        metadata.warnings.forEach((warning, index) => {
+          doc.text(`• ${warning}`, 35, yPos + 50 + (index * 10));
+        });
+        
+        // Update current Y position based on number of warnings
+        yPos += 60 + (metadata.warnings.length * 10);
+      } else {
+        yPos += 40;
+      }
+    }
+    
     // Calculate basic stats
     const total = results.length;
     const compliant = results.filter(r => r.status === 'compliant').length;
@@ -749,48 +1027,127 @@ export class PdfReportGenerator {
     
     // Add simple summary
     doc.setFontSize(12);
-    doc.text('Summary:', 20, 45);
+    doc.text('Summary:', 20, yPos);
     doc.setFontSize(10);
-    doc.text(`Total fields checked: ${total}`, 30, 55);
-    doc.text(`Compliant fields: ${compliant}`, 30, 65);
-    doc.text(`Fields with warnings: ${warnings}`, 30, 75);
-    doc.text(`Non-compliant fields: ${nonCompliant}`, 30, 85);
+    doc.text(`Total fields checked: ${total}`, 30, yPos + 10);
+    doc.text(`Compliant fields: ${compliant}`, 30, yPos + 20);
+    doc.text(`Fields with warnings: ${warnings}`, 30, yPos + 30);
+    doc.text(`Non-compliant fields: ${nonCompliant}`, 30, yPos + 40);
     
-    // Add issues (basic format)
-    let yPos = 105;
+    // Add detailed table of all fields
+    yPos += 60;
     doc.setFontSize(12);
-    doc.text('Issues found:', 20, yPos);
-    yPos += 15;
+    doc.text('All Fields Report:', 20, yPos);
+    yPos += 10;
     
-    // Only list non-compliant and warnings
-    const issues = results.filter(r => r.status !== 'compliant');
-    
-    if (issues.length === 0) {
-      doc.setFontSize(10);
-      doc.text('No compliance issues found.', 30, yPos);
+    // Check if autoTable is available, use it if possible
+    if (typeof doc.autoTable === 'function') {
+      try {
+        doc.autoTable({
+          startY: yPos,
+          head: [['Field', 'Value', 'Status', 'Message']],
+          body: results.map(r => [
+            r.field,
+            r.value || '',
+            r.status,
+            r.message
+          ]),
+          theme: 'striped',
+          headStyles: {
+            fillColor: [33, 80, 119],
+            textColor: [255, 255, 255]
+          },
+          styles: {
+            fontSize: 8,
+            cellPadding: 2
+          },
+          columnStyles: {
+            0: { cellWidth: 40 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 70 }
+          }
+        });
+      } catch (error) {
+        console.error('Error using autoTable, falling back to simple table:', error);
+        this.renderSimpleTable(doc, results, yPos);
+      }
     } else {
-      issues.forEach((issue, index) => {
-        // Check if we need a new page
-        if (yPos > 270) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        const status = issue.status === 'non-compliant' ? 'ERROR' : 'WARNING';
-        
-        doc.setFontSize(10);
-        doc.text(`${index + 1}. ${status}: ${issue.field}`, 30, yPos);
-        yPos += 10;
-        
-        if (issue.value) {
-          doc.text(`   Value: ${String(issue.value).substring(0, 50)}${String(issue.value).length > 50 ? '...' : ''}`, 30, yPos);
-          yPos += 10;
-        }
-        
-        doc.text(`   ${issue.message}`, 30, yPos);
-        yPos += 15;
-      });
+      // Fallback to simpler format if autoTable is not available
+      console.warn('autoTable function not available, using simple table format');
+      this.renderSimpleTable(doc, results, yPos);
     }
+  }
+  
+  /**
+   * Render a simple table without using autoTable plugin
+   * @param doc PDF document
+   * @param results Compliance results to display
+   * @param startY Starting Y position
+   */
+  private renderSimpleTable(doc: jsPDF, results: ComplianceResult[], startY: number): void {
+    let yPos = startY;
+    
+    // Add header
+    doc.setFillColor(33, 80, 119);
+    doc.rect(20, yPos, 170, 10, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Field', 30, yPos + 7);
+    doc.text('Value', 80, yPos + 7);
+    doc.text('Status', 130, yPos + 7);
+    doc.text('Message', 155, yPos + 7);
+    
+    yPos += 12;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    
+    // Add rows
+    let evenRow = false;
+    results.forEach((result, index) => {
+      // Check if we need a new page
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      // Alternate row colors
+      if (evenRow) {
+        doc.setFillColor(240, 240, 240);
+        doc.rect(20, yPos - 5, 170, 10, 'F');
+      }
+      
+      // Display row data
+      doc.setFontSize(8);
+      doc.text(result.field || '', 30, yPos);
+      doc.text(result.value || '', 80, yPos);
+      
+      // Set color for status
+      if (result.status === 'compliant') {
+        doc.setTextColor(40, 167, 69); // Green
+      } else if (result.status === 'warning') {
+        doc.setTextColor(255, 193, 7); // Yellow
+      } else {
+        doc.setTextColor(220, 53, 69); // Red
+      }
+      
+      doc.text(result.status, 130, yPos);
+      
+      // Reset color for message
+      doc.setTextColor(0, 0, 0);
+      
+      // If message is long, truncate it
+      const message = result.message.length > 30 
+        ? result.message.substring(0, 30) + '...' 
+        : result.message;
+      
+      doc.text(message, 155, yPos);
+      
+      yPos += 10;
+      evenRow = !evenRow;
+    });
   }
   
   /**
@@ -1093,6 +1450,50 @@ export class PdfReportGenerator {
     }
     
     return currentY;
+  }
+
+  /**
+   * Render a simple table for shipment information without using autoTable
+   * @param doc PDF document
+   * @param tableData Table data to display
+   * @param startY Starting Y position
+   */
+  private renderShipmentInfoTable(doc: jsPDF, tableData: any[][], startY: number): void {
+    let yPos = startY;
+    let evenRow = false;
+    
+    tableData.forEach(([field, value]) => {
+      // Check if we need a new page
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      // Alternate row colors
+      if (evenRow) {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(14, yPos - 5, 182, 10, 'F');
+      }
+      
+      // Field name (left column)
+      doc.setTextColor(70, 70, 70);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(field, 20, yPos);
+      
+      // Field value (right column)
+      doc.setTextColor(50, 50, 50);
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, 105, yPos);
+      
+      // Add light gray bottom border
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.1);
+      doc.line(14, yPos + 5, 196, yPos + 5);
+      
+      yPos += 10;
+      evenRow = !evenRow;
+    });
   }
 }
 
