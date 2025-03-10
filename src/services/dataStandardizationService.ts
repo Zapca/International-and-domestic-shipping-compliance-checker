@@ -140,7 +140,7 @@ const STANDARD_FIELD_EXAMPLES: Record<string, string[]> = {
 };
 
 // Gemini API configuration
-const API_KEY = 'AIzaSyAraWPlckPfQpXrnbXdRy_iu1ctsjzGzjo';
+const API_KEY = 'your_api_key_here';
 const MODEL_NAME = 'gemini-1.5-pro';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
 
