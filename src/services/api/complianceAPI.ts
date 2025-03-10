@@ -532,6 +532,6 @@ export const complianceApi = new ComplianceAPIService({
  */
 export const complianceAPIService = new ComplianceAPIService({
   baseUrl: 'https://api.compliance.example.com/v1',
-  apiKey: process.env.REACT_APP_COMPLIANCE_API_KEY || 'default-api-key',
+  apiKey: process.env.REACT_APP_COMPLIANCE_API_KEY || 'your_api_key_here',
   region: 'GLOBAL'
 }); 
