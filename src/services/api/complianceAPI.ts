@@ -522,7 +522,7 @@ export class ComplianceAPIService {
 // Replace with actual API credentials when available
 export const complianceApi = new ComplianceAPIService({
   baseUrl: process.env.REACT_APP_COMPLIANCE_API_URL || 'https://api.complianceregulations.com',
-  apiKey: process.env.REACT_APP_COMPLIANCE_API_KEY || 'your-api-key',
+  apiKey: process.env.REACT_APP_COMPLIANCE_API_KEY || 'your_api_key_here',
   region: process.env.REACT_APP_COMPLIANCE_REGION || 'US'
 });
 
