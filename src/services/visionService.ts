@@ -27,7 +27,7 @@ interface ExtractedData {
 }
 
 // Gemini API configuration for image analysis ONLY
-const API_KEY = 'AIzaSyAraWPlckPfQpXrnbXdRy_iu1ctsjzGzjo';
+const API_KEY = 'your_api_key';
 const MODEL_NAME = 'gemini-2.0-flash-thinking-exp-01-21'; // Vision-enabled model
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
 
