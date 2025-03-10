@@ -25,7 +25,7 @@ export interface ResolutionSuggestion {
  */
 export class ComplianceChatService {
   // NOTE: In production, this should be loaded from environment variables
-  private API_KEY = 'AIzaSyAraWPlckPfQpXrnbXdRy_iu1ctsjzGzjo';
+  private API_KEY = 'your_api_key_here';
   
   // Use the standard model name that is known to be available
   private MODEL_NAME = 'gemini-pro';
