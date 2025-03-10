@@ -644,7 +644,7 @@ export class CrossBorderComplianceService {
    */
   private async callGeminiAPI(prompt: string): Promise<any> {
     try {
-      const API_KEY = 'AIzaSyAraWPlckPfQpXrnbXdRy_iu1ctsjzGzjo'; // Should be in environment variables
+      const API_KEY = 'your_api_key_here'; // Should be in environment variables
       const MODEL_NAME = 'gemini-2.0-flash-thinking-exp-01-21';
       const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
       
